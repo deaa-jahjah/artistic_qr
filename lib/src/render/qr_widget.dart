@@ -64,27 +64,44 @@ class _ArtisticQrCodeState extends State<ArtisticQrCode> {
   Object? _error;
   QrImageRenderData? _imageData;
   int _imageRequest = 0;
+  bool _dependenciesChanged = false;
 
   @override
   void initState() {
     super.initState();
     _encode();
-    _resolveImage();
+    // 将 _resolveImage 移到 didChangeDependencies
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // 只在首次或依赖变化时加载图片
+    if (!_dependenciesChanged) {
+      _dependenciesChanged = true;
+      _resolveImage();
+    }
   }
 
   @override
   void didUpdateWidget(ArtisticQrCode oldWidget) {
     super.didUpdateWidget(oldWidget);
-    final reencode = oldWidget.data != widget.data ||
+    final reencode =
+        oldWidget.data != widget.data ||
         oldWidget.errorCorrection != widget.errorCorrection;
     if (reencode) _encode();
-    if (reencode || oldWidget.image != widget.image) _resolveImage();
+    // 如果 image 变化，重新加载
+    if (oldWidget.image != widget.image) {
+      _resolveImage();
+    }
   }
 
   void _encode() {
     try {
-      _code = QrCode.encode(widget.data,
-          errorCorrection: widget.errorCorrection);
+      _code = QrCode.encode(
+        widget.data,
+        errorCorrection: widget.errorCorrection,
+      );
       _error = null;
     } catch (e) {
       _code = null;
@@ -100,18 +117,19 @@ class _ArtisticQrCodeState extends State<ArtisticQrCode> {
     if (image == null || code == null) return;
     try {
       final pixels = await image.source.resolve(
-          configuration: createLocalImageConfiguration(context));
+        configuration: createLocalImageConfiguration(context),
+      );
       final data = buildImageRenderData(
         code: code,
         style: widget.style,
         image: ResolvedQrImage(pixels: pixels, mode: image.mode),
       );
-      // A newer request may have started while we were loading.
       if (mounted && request == _imageRequest) {
         setState(() => _imageData = data);
       }
-    } catch (_) {
+    } catch (e) {
       // Image failed to load: keep showing the plain styled code.
+      // 可以添加日志或错误处理
     }
   }
 
@@ -128,16 +146,15 @@ class _ArtisticQrCodeState extends State<ArtisticQrCode> {
       textDirection: Directionality.maybeOf(context) ?? TextDirection.ltr,
       image: true,
       child: CustomPaint(
-        size: widget.size != null
-            ? Size.square(widget.size!)
-            : Size.infinite,
+        size: widget.size != null ? Size.square(widget.size!) : Size.infinite,
         painter: imageData == null
             ? QrPainter(code: _code!, style: widget.style, frame: widget.frame)
             : QrPainter.withImage(
                 code: _code!,
                 style: widget.style,
                 frame: widget.frame,
-                imageData: imageData),
+                imageData: imageData,
+              ),
       ),
     );
   }
